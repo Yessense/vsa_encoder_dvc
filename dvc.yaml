@@ -1,0 +1,8 @@
+stages:
+  prepare_data:
+    cmd: bash prepare_data.sh
+    deps:
+    - ./vsa_encoder/dataset/paired_dsprites.py
+    - prepare_data.sh
+    outs:
+    - data/
