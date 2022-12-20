@@ -13,6 +13,8 @@ from torch import nn
 from utils import iou_pytorch
 import torch.nn.functional as F
 
+from vsa_encoder.model.binder import FourierBinder, RandnBinder, IdentityBinder
+
 
 class VSAVAE(pl.LightningModule):
     @staticmethod
@@ -21,10 +23,14 @@ class VSAVAE(pl.LightningModule):
 
         # dataset options
         parser.add_argument("--n_features", type=int, default=5)
-        parser.add_argument("--image_size", type=Tuple[int, int, int], default=(1, 64, 64))  # type: ignore
+        parser.add_argument("--image_size", type=Tuple[int, int, int],
+                            default=(1, 64, 64))  # type: ignore
         parser.add_argument("--latent_dim", type=int, default=1024)
         parser.add_argument("--normalization", default=None)
-        parser.add_argument("--bind_mode", type=str, choices=["fourier", "randn"], default="fourier")
+        parser.add_argument("--bind_mode", type=str,
+                            choices=["fourier", "randn", "default"], default="fourier")
+        parser.add_argument("--encoder_mode", type=str, choices=["vae", "ae"],
+                            default="vae")
 
         # model options
         parser.add_argument("--lr", type=float, default=0.00025)
@@ -55,22 +61,21 @@ class VSAVAE(pl.LightningModule):
         self.kld_coef = kld_coef
 
         # Layers
-        self.encoder = Encoder(latent_dim=latent_dim, image_size=image_size, n_features=n_features)
-        self.decoder = Decoder(latent_dim=latent_dim, image_size=image_size)
+        self.encoder = Encoder(latent_dim=self.latent_dim,
+                               image_size=self.image_size,
+                               n_features=self.n_features)
+        self.decoder = Decoder(latent_dim=self.latent_dim,
+                               image_size=self.image_size)
 
         # hd placeholders
-
         if self.bind_mode == 'fourier':
-            hd_placeholders = torch.randn(1, self.n_features, self.latent_dim)
-            norm = torch.linalg.norm(hd_placeholders, dim=-1)
-            norm = norm.unsqueeze(-1).expand(hd_placeholders.size())
-            hd_placeholders = hd_placeholders / norm
+            self.binder = FourierBinder(self.n_features, self.latent_dim)
         elif self.bind_mode == 'randn':
-            hd_placeholders = torch.randn(1, self.n_features, self.latent_dim)
+            self.binder = RandnBinder(self.n_features, self.latent_dim)
+        elif self.bind_mode == 'default':
+            self.binder = IdentityBinder(self.n_features, self.latent_dim)
         else:
             raise ValueError(f"Wrong bind mode {self.bind_mode}")
-
-        self.hd_placeholders = nn.Parameter(data=hd_placeholders)
 
         self.save_hyperparameters()
 
@@ -86,8 +91,8 @@ class VSAVAE(pl.LightningModule):
     def get_features(self, x):
         """ Get features with shape -> [batch_size, n_features, latent_dim]"""
         mu, log_var = self.encoder(x)
-
         z = self.reparametrize(mu, log_var)
+
         z = z.reshape(-1, self.n_features, self.latent_dim)
         return z
 
@@ -98,15 +103,11 @@ class VSAVAE(pl.LightningModule):
         out -> [batch_size, n_features, latent_dim]
         """
         mu, log_var = self.encoder(x)
-
         z = self.reparametrize(mu, log_var)
-        z = z.reshape(-1, self.n_features, self.latent_dim)
-        mask = self.hd_placeholders.data
 
-        if self.bind_mode == 'fourier':
-            z = bind(z, mask)
-        elif self.bind_mode == 'randn':
-            z = z * mask
+        z = z.reshape(-1, self.n_features, self.latent_dim)
+
+        z = self.binder(z)
 
         return z, mu, log_var
 
@@ -115,21 +116,29 @@ class VSAVAE(pl.LightningModule):
         exchange_labels = exchange_labels.expand(image_features.size())
 
         # Reconstruct image
-        donor_features_exept_one = torch.where(exchange_labels, image_features, donor_features)
+        donor_features_exept_one = torch.where(exchange_labels, image_features,
+                                               donor_features)
         donor_features_exept_one = torch.sum(donor_features_exept_one, dim=1)
         if self.normalization == 'n_features':
-            donor_features_exept_one = donor_features_exept_one / math.sqrt(self.n_features)
+            donor_features_exept_one = donor_features_exept_one / math.sqrt(
+                self.n_features)
         elif self.normalization == 'linalg_norm':
-            norm = torch.linalg.norm(donor_features_exept_one, dim=-1).unsqueeze(-1)
+            norm = torch.linalg.norm(donor_features_exept_one,
+                                     dim=-1).unsqueeze(-1)
             donor_features_exept_one = donor_features_exept_one / norm
 
         # Donor image
-        image_features_exept_one = torch.where(exchange_labels, donor_features, image_features)
+        image_features_exept_one = torch.where(exchange_labels, donor_features,
+                                               image_features)
         image_features_exept_one = torch.sum(image_features_exept_one, dim=1)
+
+        # Normalization
         if self.normalization == 'n_features':
-            image_features_exept_one = image_features_exept_one / math.sqrt(self.n_features)
+            image_features_exept_one = image_features_exept_one / math.sqrt(
+                self.n_features)
         elif self.normalization == 'linalg_norm':
-            norm = torch.linalg.norm(image_features_exept_one, dim=-1).unsqueeze(-1)
+            norm = torch.linalg.norm(image_features_exept_one,
+                                     dim=-1).unsqueeze(-1)
             image_features_exept_one = image_features_exept_one / norm
 
         return donor_features_exept_one, image_features_exept_one
@@ -138,8 +147,9 @@ class VSAVAE(pl.LightningModule):
         image_features, image_mu, image_log_var = self.encode(image)
         donor_features, donor_mu, donor_log_var = self.encode(donor)
 
-        donor_features_exept_one, image_features_exept_one = self.exchange(image_features, donor_features,
-                                                                           exchange_labels)
+        donor_features_exept_one, image_features_exept_one = self.exchange(
+            image_features, donor_features,
+            exchange_labels)
         recon_like_image = self.decoder(donor_features_exept_one)
         recon_like_donor = self.decoder(image_features_exept_one)
 
@@ -164,12 +174,15 @@ class VSAVAE(pl.LightningModule):
             raise ValueError
 
         image, donor, exchange_labels = batch
-        reconstructions, mus, log_vars = self.forward(image, donor, exchange_labels)
+        reconstructions, mus, log_vars = self.forward(image, donor,
+                                                      exchange_labels)
 
         mus = sum(mus) * 2 ** -0.5
         log_vars = sum(mus) * 2 ** -0.5
 
-        image_loss, donor_loss, kld_loss = self.loss_f((image, donor), reconstructions, mus, log_vars)
+        image_loss, donor_loss, kld_loss = self.loss_f((image, donor),
+                                                       reconstructions, mus,
+                                                       log_vars)
 
         total_loss = (image_loss + donor_loss) * 0.5 + self.kld_coef * kld_loss
 
@@ -195,8 +208,10 @@ class VSAVAE(pl.LightningModule):
                 f"{mode}/Images": [
                     wandb.Image(image[0], caption='Image'),
                     wandb.Image(donor[0], caption='Donor'),
-                    wandb.Image(reconstructions[0][0], caption='Recon like Image'),
-                    wandb.Image(reconstructions[1][0], caption='Recon like Donor'),
+                    wandb.Image(reconstructions[0][0],
+                                caption='Recon like Image'),
+                    wandb.Image(reconstructions[1][0],
+                                caption='Recon like Donor'),
                 ]})
 
         return total_loss
@@ -226,7 +241,8 @@ class VSAVAE(pl.LightningModule):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr)
         scheduler = lr_scheduler.OneCycleLR(optimizer, max_lr=self.lr,
                                             epochs=self.hparams['max_epochs'],
-                                            steps_per_epoch=self.hparams['steps_per_epoch'],
+                                            steps_per_epoch=self.hparams[
+                                                'steps_per_epoch'],
                                             pct_start=0.2)
         return {"optimizer": optimizer,
                 "lr_scheduler": {'scheduler': scheduler,

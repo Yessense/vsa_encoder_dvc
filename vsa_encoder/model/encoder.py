@@ -5,8 +5,10 @@ from typing import Tuple
 import torch
 from torch import nn
 
+
 def product(arr):
     return reduce(operator.mul, arr)
+
 
 class Encoder(nn.Module):
     def __init__(self,
@@ -23,7 +25,9 @@ class Encoder(nn.Module):
         # NN parameters
         self.hidden_channels = hidden_channels
         self.in_channels = self.image_size[0]
+
         self.out_channels = 2 * self.latent_dim * self.n_features
+
         self.activation = torch.nn.ReLU()
         cnn_kwargs = dict(kernel_size=4, stride=2, padding=1)
 
@@ -63,7 +67,8 @@ class Encoder(nn.Module):
         # x -> (batch_size, self.reshape)
 
         x = self.final_layers(x)
-        x = x.reshape(-1, 2, self.latent_dim * self.n_features)
 
+        x = x.reshape(-1, 2, self.latent_dim * self.n_features)
         mu, log_var = x.unbind(1)
         return mu, log_var
+
