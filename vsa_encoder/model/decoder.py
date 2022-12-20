@@ -5,8 +5,7 @@ from typing import Tuple
 import torch
 from torch import nn
 
-def product(arr):
-    return reduce(operator.mul, arr)
+from ..utils import product
 
 
 class Decoder(nn.Module):

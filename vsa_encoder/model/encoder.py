@@ -5,9 +5,7 @@ from typing import Tuple
 import torch
 from torch import nn
 
-
-def product(arr):
-    return reduce(operator.mul, arr)
+from ..utils import product
 
 
 class Encoder(nn.Module):
@@ -71,4 +69,3 @@ class Encoder(nn.Module):
         x = x.reshape(-1, 2, self.latent_dim * self.n_features)
         mu, log_var = x.unbind(1)
         return mu, log_var
-

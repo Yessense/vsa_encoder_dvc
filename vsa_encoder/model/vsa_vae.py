@@ -2,21 +2,24 @@ import math
 from argparse import ArgumentParser
 from typing import Tuple, Optional
 
+import torch
 import pytorch_lightning as pl
 import wandb
-from torch.optim import lr_scheduler
-from model.decoder import Decoder
-from model.encoder import Encoder
-import torch
-from vsa import bind
-from torch import nn
-from utils import iou_pytorch
-import torch.nn.functional as F
 
-from vsa_encoder.model.binder import FourierBinder, RandnBinder, IdentityBinder
+from torch import nn
+from torch.nn import functional as F
+from torch.optim import lr_scheduler
+
+from .decoder import Decoder
+from .encoder import Encoder
+from ..utils import iou_pytorch
+
+from vsa_encoder.model.binder import FourierBinder, RandnBinder, IdentityBinder, Binder
 
 
 class VSAVAE(pl.LightningModule):
+    binder: Binder
+
     @staticmethod
     def add_model_specific_args(parent_parser: ArgumentParser):
         parser = parent_parser.add_argument_group("VSA VAE")
@@ -248,11 +251,3 @@ class VSAVAE(pl.LightningModule):
                 "lr_scheduler": {'scheduler': scheduler,
                                  'interval': 'step',
                                  'frequency': 1}, }
-
-
-if __name__ == '__main__':
-    vsavae = VSAVAE()
-    x = torch.randn(10, 1, 64, 64)
-    exchanges = torch.randint(0, 2, (10, 5), dtype=bool)
-
-    out = vsavae.forward(x, x, exchanges)
