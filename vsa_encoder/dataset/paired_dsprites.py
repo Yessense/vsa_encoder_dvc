@@ -280,8 +280,9 @@ def cli():
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", choices=['make_dataset', 'show_dataset'],
-                        default='make_dataset')
-    parser.add_argument("--max_exchanges", type=int, choices=[1, 2, 3, 4, 5], default=1)
+                        default='show_dataset')
+    parser.add_argument("--max_exchanges", type=int, choices=[1, 2, 3, 4, 5],
+                        default=1)
     parser.add_argument("--path_to_dsprites_train", type=str,
                         default='../../data/paired_dsprites/dsprites_train.npz')
     parser.add_argument("--train_size", type=int, default=100_000)
