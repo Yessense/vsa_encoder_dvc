@@ -1,6 +1,6 @@
 dataset:
   mode: "dsprites"
-  path_to_dataset: "../data/paired_dsprites"
+  path_to_dataset: "./data/paired_dsprites"
 
 experiment:
   seed: 0
