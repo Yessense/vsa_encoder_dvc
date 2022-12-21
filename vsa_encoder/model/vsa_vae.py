@@ -1,67 +1,39 @@
 import math
-from argparse import ArgumentParser
+from dataclasses import dataclass
 from typing import Tuple, Optional
 
-import torch
 import pytorch_lightning as pl
+import torch
 import wandb
-
 from torch import nn
-from torch.nn import functional as F
 from torch.optim import lr_scheduler
 
+from .binder import FourierBinder, RandnBinder, IdentityBinder, Binder
 from .decoder import Decoder
 from .encoder import Encoder
 from ..utils import iou_pytorch
-
-from vsa_encoder.model.binder import FourierBinder, RandnBinder, IdentityBinder, Binder
+from .configs import VAEConfig
 
 
 class VSAVAE(pl.LightningModule):
     binder: Binder
-
-    @staticmethod
-    def add_model_specific_args(parent_parser: ArgumentParser):
-        parser = parent_parser.add_argument_group("VSA VAE")
-
-        # dataset options
-        parser.add_argument("--n_features", type=int, default=5)
-        parser.add_argument("--image_size", type=Tuple[int, int, int],
-                            default=(1, 64, 64))  # type: ignore
-        parser.add_argument("--latent_dim", type=int, default=1024)
-        parser.add_argument("--normalization", default=None)
-        parser.add_argument("--bind_mode", type=str,
-                            choices=["fourier", "randn", "default"], default="fourier")
-        parser.add_argument("--encoder_mode", type=str, choices=["vae", "ae"],
-                            default="vae")
-
-        # model options
-        parser.add_argument("--lr", type=float, default=0.00025)
-        parser.add_argument("--kld_coef", type=float, default=0.001)
-
-        return parent_parser
+    cfg: VAEConfig
 
     def __init__(self,
-                 n_features: int = 5,
-                 image_size: Tuple[int, int, int] = (1, 64, 64),
-                 lr: float = 0.00030,
-                 kld_coef: float = 0.001,
-                 bind_mode: str = 'fourier',
-                 latent_dim: int = 1024,
-                 normalization: Optional[str] = None,
-                 **kwargs):
+                 cfg: VAEConfig):
         super().__init__()
+        self.cfg = cfg
 
         # Experiment options
-        self.image_size = image_size
-        self.latent_dim = latent_dim
-        self.n_features = n_features
-        self.bind_mode = bind_mode
-        self.normalization = normalization  # sum normalization on number of features
+        self.image_size = cfg.model.image_size
+        self.latent_dim = cfg.model.latent_dim
+        self.n_features = cfg.model.n_features
+        self.bind_mode = cfg.model.bind_mode
+        self.normalization = None  # sum normalization on number of features
 
         # model parameters
-        self.lr = lr
-        self.kld_coef = kld_coef
+        self.lr = cfg.model.lr
+        self.kld_coef = cfg.model.kld_coef
 
         # Layers
         self.encoder = Encoder(latent_dim=self.latent_dim,
@@ -243,9 +215,8 @@ class VSAVAE(pl.LightningModule):
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr)
         scheduler = lr_scheduler.OneCycleLR(optimizer, max_lr=self.lr,
-                                            epochs=self.hparams['max_epochs'],
-                                            steps_per_epoch=self.hparams[
-                                                'steps_per_epoch'],
+                                            epochs=self.cfg.experiment.max_epochs,
+                                            steps_per_epoch=self.cfg.experiment.steps_per_epoch,
                                             pct_start=0.2)
         return {"optimizer": optimizer,
                 "lr_scheduler": {'scheduler': scheduler,
