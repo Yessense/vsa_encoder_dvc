@@ -6,3 +6,10 @@ stages:
     - prepare_data.sh
     outs:
     - data/
+  train:
+    cmd: python3 -m vsa_encoder.train
+    deps:
+    - conf/
+    - vsa_encoder/model/
+    - vsa_encoder/train.py
+    - vsa_encoder/utils.py
