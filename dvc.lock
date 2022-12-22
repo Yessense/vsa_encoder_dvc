@@ -1,0 +1,33 @@
+schema: '2.0'
+stages:
+  prepare_data:
+    cmd: bash prepare_data.sh
+    deps:
+    - path: ./vsa_encoder/dataset/paired_dsprites.py
+      md5: 1682ccdbfa03abfdb0dab4d61f944b72
+      size: 10685
+    - path: prepare_data.sh
+      md5: 67c28c76da20862669dfc22a22c30123
+      size: 437
+    outs:
+    - path: data/
+      md5: 1cb951cad95671d1df2ab3fe47840023.dir
+      size: 20245742
+      nfiles: 3
+  train:
+    cmd: python3 -m vsa_encoder.train
+    deps:
+    - path: conf/
+      md5: 884e148b9e72ac42bc18f2c53a9f8d67.dir
+      size: 477
+      nfiles: 1
+    - path: vsa_encoder/model/
+      md5: 4c309c6aef08e547e1dc765750e37a10.dir
+      size: 32524
+      nfiles: 12
+    - path: vsa_encoder/train.py
+      md5: f6b30d943e329386e960559595007264
+      size: 4315
+    - path: vsa_encoder/utils.py
+      md5: 4d835656f3021da59a19ec5be3ceff05
+      size: 1016
