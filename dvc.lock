@@ -4,8 +4,8 @@ stages:
     cmd: bash prepare_data.sh
     deps:
     - path: ./vsa_encoder/dataset/paired_dsprites.py
-      md5: 1682ccdbfa03abfdb0dab4d61f944b72
-      size: 10685
+      md5: 8cb9aa501d59346e3be2b8740bcb2f33
+      size: 12502
     - path: prepare_data.sh
       md5: 67c28c76da20862669dfc22a22c30123
       size: 437
