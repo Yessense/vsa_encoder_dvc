@@ -159,7 +159,7 @@ class VSAVAE(pl.LightningModule):
         self.labels.append(labels)
 
     def on_test_end(self) -> None:
-        self.
+        pass
 
     def forward(self, image, donor, exchange_labels):
         image_features, image_mu, image_log_var = self.encode(image)
