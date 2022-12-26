@@ -183,13 +183,17 @@ class Dsprites(Dataset):
         return pos
 
 
+import pytorch_lightning as pl
+
+
 class PairedDspritesDataset(Dataset):
-    def __init__(self,
-                 dsprites_path='../data/dsprite_train.npz',
-                 paired_dsprites_path='../data/paired_train.npz'):
+    def __init__(self, dsprites_path='../data/dsprite_train.npz',
+                 paired_dsprites_path='../data/paired_train.npz',
+                 test_mode: bool = False):
         # Load npz numpy archive
         dsprites = np.load(dsprites_path, allow_pickle=True)
         paired_dsprites = np.load(paired_dsprites_path, allow_pickle=True)
+        self.test_mode = test_mode
 
         self.data = paired_dsprites['data']
         self.exchanges = paired_dsprites['exchanges']
@@ -216,7 +220,52 @@ class PairedDspritesDataset(Dataset):
         pair_img = torch.from_numpy(pair_img).unsqueeze(0).float()
 
         exchange = torch.from_numpy(self.exchanges[idx]).bool().unsqueeze(-1)
-        return img, pair_img, exchange
+
+        if self.test_mode:
+            img_label = self.labes[self.data[idx][0]]
+            pair_label = self.labes[self.data[idx][1]]
+            return img, pair_img, exchange, img_label, pair_label
+        else:  # train
+            return img, pair_img, exchange
+
+
+class PairedDspritesDatamodule(pl.LightningDataModule):
+    train_dataset: Dataset
+    val_dataset: Dataset
+    test_dataset: Dataset
+
+    def __init__(self, path_to_data_dir: str = '../data/',
+                 batch_size: int = 64):
+        super().__init__()
+        self.path_to_data_dir = Path(path_to_data_dir)
+        self.path_to_dsprites_dataset = path_to_data_dir / 'dsprites.npz'
+        self.batch_size = batch_size
+        self.image_size = (1, 64, 64)
+
+    def setup(self, stage):
+        self.train_dataset = PairedDspritesDataset(
+            dsprites_path=self.path_to_dsprites_dataset,
+            paired_dsprites_path=str(
+                self.path_to_data_dir / 'paired_train.npz'))
+
+        self.val_dataset = PairedDspritesDataset(
+            dsprites_path=self.path_to_dsprites_dataset,
+            paired_dsprites_path=str(self.path_to_data_dir / 'paired_test.npz'))
+
+        self.test_dataset = PairedDspritesDataset(
+            dsprites_path=self.path_to_dsprites_dataset,
+            paired_dsprites_path=str(self.path_to_data_dir / 'paired_test.npz'),
+            test_mode=True,
+        )
+
+    def train_dataloader(self):
+        return DataLoader(self.train_dataset, batch_size=self.batch_size, drop_last=True)
+
+    def val_dataloader(self):
+        return DataLoader(self.val_dataset, batch_size=self.batch_size, drop_last=True)
+
+    def test_dataloader(self):
+        return DataLoader(self.test_dataset, batch_size=self.batch_size, drop_last=True)
 
 
 def plot_dataset(

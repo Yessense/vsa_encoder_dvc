@@ -26,6 +26,8 @@ class CheckpointsConfig:
 class DatasetConfig:
     path_to_dataset: str
     mode: str = 'dsprites'
+    train_size: int = 100_000
+    val_size: int = 30_000
 
 
 @dataclass

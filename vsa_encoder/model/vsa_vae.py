@@ -55,6 +55,7 @@ class VSAVAE(pl.LightningModule):
         self.save_hyperparameters()
 
     def reparametrize(self, mu, log_var):
+        """ Reparametrization trick for training"""
         if self.training:
             std = torch.exp(0.5 * log_var)
             eps = torch.randn_like(std)
@@ -87,6 +88,19 @@ class VSAVAE(pl.LightningModule):
         return z, mu, log_var
 
     def exchange(self, image_features, donor_features, exchange_labels):
+        """
+        Exchange features for given tensors based on `exchange_labels`
+
+        Parameters
+        ----------
+        image_features
+        donor_features
+        exchange_labels
+
+        Returns
+        -------
+        out = donor_features_exept_one, image_features_exept_one
+        """
         # Exchange
         exchange_labels = exchange_labels.expand(image_features.size())
 
@@ -117,6 +131,13 @@ class VSAVAE(pl.LightningModule):
             image_features_exept_one = image_features_exept_one / norm
 
         return donor_features_exept_one, image_features_exept_one
+
+    def test_step(self, batch, batch_idx):
+        image, donor, exchange_labels = batch
+
+
+
+
 
     def forward(self, image, donor, exchange_labels):
         image_features, image_mu, image_log_var = self.encode(image)

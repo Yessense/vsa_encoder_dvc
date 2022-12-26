@@ -13,59 +13,55 @@ from torch.utils.data import DataLoader
 
 from .model.configs import VAEConfig
 from .dataset.clevr import PairedCogentClevr
-from .dataset.paired_dsprites import PairedDspritesDataset
+from .dataset.paired_dsprites import PairedDspritesDataset, \
+    PairedDspritesDatamodule
 from .model.vsa_vae import VSAVAE
 
 cs = ConfigStore.instance()
 cs.store(name='config', node=VAEConfig)
 
 
-@hydra.main(version_base=None, config_path="../conf/", config_name="train_config")
+@hydra.main(version_base=None, config_path="../conf/",
+            config_name="train_config")
 def train(cfg: VAEConfig) -> None:
     print(OmegaConf.to_yaml(cfg))
     seed_everything(cfg.experiment.seed)
 
     if cfg.dataset.mode == 'dsprites':
-        cfg.model.image_size = (1, 64, 64)
-        images_path = Path(cfg.dataset.path_to_dataset) / 'dsprites_train.npz'
-        train_path = Path(cfg.dataset.path_to_dataset) / 'paired_train.npz'
-        test_path = Path(cfg.dataset.path_to_dataset) / 'paired_test.npz'
-
-        train_dataset = PairedDspritesDataset(dsprites_path=images_path,
-                                              paired_dsprites_path=train_path)
-        test_dataset = PairedDspritesDataset(dsprites_path=images_path,
-                                             paired_dsprites_path=test_path)
-
-        train_loader = DataLoader(train_dataset, batch_size=cfg.experiment.batch_size,
-                                  num_workers=10, drop_last=True,
-                                  shuffle=True)
-        test_loader = DataLoader(test_dataset, batch_size=cfg.experiment.batch_size, num_workers=10,
-                                 drop_last=True)
+        paired_dsprites_datamodule = PairedDspritesDatamodule(
+            path_to_data_dir=cfg.dataset.path_to_dataset,
+            batch_size=cfg.experiment.batch_size)
+        cfg.model.image_size = paired_dsprites_datamodule.image_size
 
     elif cfg.dataset.mode == 'clevr':
-        cfg.model.image_size = (3, 128, 128)
-        train_path = Path(cfg.dataset.path_to_dataset) / 'train'
-        val_path = Path(cfg.dataset.path_to_dataset) / 'val'
-
-        train_dataset = PairedCogentClevr(dataset_path=train_path)
-        test_dataset = PairedCogentClevr(dataset_path=val_path)
-
-        train_loader = DataLoader(train_dataset, batch_size=cfg.experiment.batch_size,
-                                  num_workers=10,
-                                  drop_last=True,
-                                  shuffle=True)
-        test_loader = DataLoader(test_dataset, batch_size=cfg.experiment.batch_size, num_workers=10,
-                                 drop_last=True)
+        pass
+        # cfg.model.image_size = (3, 128, 128)
+        # train_path = Path(cfg.dataset.path_to_dataset) / 'train'
+        # val_path = Path(cfg.dataset.path_to_dataset) / 'val'
+        #
+        # train_dataset = PairedCogentClevr(dataset_path=train_path)
+        # test_dataset = PairedCogentClevr(dataset_path=val_path)
+        #
+        # train_loader = DataLoader(train_dataset,
+        #                           batch_size=cfg.experiment.batch_size,
+        #                           num_workers=10,
+        #                           drop_last=True,
+        #                           shuffle=True)
+        # test_loader = DataLoader(test_dataset,
+        #                          batch_size=cfg.experiment.batch_size,
+        #                          num_workers=10,
+        #                          drop_last=True)
     else:
         raise ValueError("Wrong mode")
 
-    cfg.experiment.steps_per_epoch = len(train_loader)
+    cfg.experiment.steps_per_epoch = cfg.dataset.train_size // cfg.experiment.batch_size
 
     autoencoder = VSAVAE(cfg=cfg)
 
     top_metric_callback = ModelCheckpoint(monitor=cfg.model.monitor,
                                           save_top_k=cfg.checkpoints.save_top_k)
-    every_epoch_callback = ModelCheckpoint(every_n_epochs=cfg.checkpoints.every_k_epochs)
+    every_epoch_callback = ModelCheckpoint(
+        every_n_epochs=cfg.checkpoints.every_k_epochs)
 
     # Learning rate monitor
     lr_monitor = LearningRateMonitor(logging_interval='step')
@@ -95,8 +91,7 @@ def train(cfg: VAEConfig) -> None:
                          gradient_clip_val=cfg.experiment.gradient_clip)
 
     trainer.fit(autoencoder,
-                train_dataloaders=train_loader,
-                val_dataloaders=test_loader,
+                datamodule=paired_dsprites_datamodule,
                 ckpt_path=cfg.checkpoints.ckpt_path)
 
 
