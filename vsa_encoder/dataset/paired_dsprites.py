@@ -5,6 +5,7 @@ from typing import Tuple, List, Set
 import torch
 import numpy as np
 from torch.utils.data import DataLoader, Dataset
+import pytorch_lightning as pl
 import itertools
 import operator
 
@@ -183,7 +184,6 @@ class Dsprites(Dataset):
         return pos
 
 
-import pytorch_lightning as pl
 
 
 class PairedDspritesDataset(Dataset):
@@ -238,7 +238,7 @@ class PairedDspritesDatamodule(pl.LightningDataModule):
                  batch_size: int = 64):
         super().__init__()
         self.path_to_data_dir = Path(path_to_data_dir)
-        self.path_to_dsprites_dataset = path_to_data_dir / 'dsprites.npz'
+        self.path_to_dsprites_dataset = str(self.path_to_data_dir / 'dsprites.npz')
         self.batch_size = batch_size
         self.image_size = (1, 64, 64)
 

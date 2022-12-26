@@ -1,10 +1,11 @@
 import math
 from dataclasses import dataclass
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Any
 
 import pytorch_lightning as pl
 import torch
 import wandb
+from pytorch_lightning.utilities.types import STEP_OUTPUT
 from torch import nn
 from torch.optim import lr_scheduler
 
@@ -132,12 +133,33 @@ class VSAVAE(pl.LightningModule):
 
         return donor_features_exept_one, image_features_exept_one
 
+    def on_test_start(self) -> None:
+        self.latent_vectors = []
+        self.labels = []
+
     def test_step(self, batch, batch_idx):
-        image, donor, exchange_labels = batch
+        image, donor, exchange_labels, img_label, pair_label = batch
 
+        image_features, image_mu, image_log_var = self.encode(image)
+        donor_features, donor_mu, donor_log_var = self.encode(donor)
 
+        image_latent = torch.sum(image_features, dim=1)
+        donor_latent = torch.sum(donor_features, dim=1)
+        latent_vectors = torch.cat((image_latent, donor_latent), dim=0),
+        labels = torch.cat((img_label, pair_label), dim=0)
+        return latent_vectors, labels
 
+    def on_test_batch_end(self,
+                          outputs: Optional[STEP_OUTPUT],
+                          batch: Any,
+                          batch_idx: int,
+                          dataloader_idx: int) -> None:
+        latent_vectors, labels = outputs
+        self.latent_vectors.append(latent_vectors)
+        self.labels.append(labels)
 
+    def on_test_end(self) -> None:
+        self.
 
     def forward(self, image, donor, exchange_labels):
         image_features, image_mu, image_log_var = self.encode(image)
